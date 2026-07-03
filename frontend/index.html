@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Data Analyst Agent</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>AI Data Analyst Agent</h1>
+      <p class="subtitle">Ask a question about the company's sales, HR, or operations data.</p>
+    </header>
+
+    <main id="chat" class="chat"></main>
+
+    <form id="ask-form" class="composer">
+      <input
+        id="question-input"
+        type="text"
+        placeholder="e.g. Show hiring trends, Why did attrition increase?, Show sales by region"
+        autocomplete="off"
+      />
+      <button type="submit" id="ask-button">Ask</button>
+    </form>
+
+    <div class="examples">
+      <span>Try:</span>
+      <button class="example-chip" data-question="Show hiring trends">Show hiring trends</button>
+      <button class="example-chip" data-question="Why did attrition increase?">Why did attrition increase?</button>
+      <button class="example-chip" data-question="Show sales by region">Show sales by region</button>
+      <button class="example-chip" data-question="Show sales trend">Show sales trend</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
