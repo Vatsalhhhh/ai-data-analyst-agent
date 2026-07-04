@@ -23,7 +23,7 @@ def _basic_stats(df, value_col):
     }
 
 
-def generate_insight_fallback(question: str, df, value_col: str, date_col: str = None, anomaly_df=None) -> tuple:
+def generate_insight_fallback(question: str, df, value_col: str, date_col: str = None, anomaly_df=None, forecast_df=None) -> tuple:
     """
     Returns (insight_text, suggested_action) built from real computed
     numbers in df. No LLM required.
@@ -59,6 +59,10 @@ def generate_insight_fallback(question: str, df, value_col: str, date_col: str =
     else:
         summary_parts.append("No statistically significant outliers were detected in this series.")
 
+    forecast_summary = _forecast_summary(value_col, forecast_df)
+    if forecast_summary:
+        summary_parts.append(forecast_summary)
+
     insight_text = " ".join(summary_parts)
 
     if anomaly_count > 0 and direction == "decreasing":
@@ -82,7 +86,7 @@ def generate_insight_fallback(question: str, df, value_col: str, date_col: str =
     return insight_text, suggested_action
 
 
-def generate_insight_llm(question: str, df, value_col: str, date_col: str = None, anomaly_df=None) -> tuple:
+def generate_insight_llm(question: str, df, value_col: str, date_col: str = None, anomaly_df=None, forecast_df=None) -> tuple:
     """
     Uses langchain + openai to produce a polished executive summary and
     suggested action, grounded in the same computed stats as the fallback
@@ -96,6 +100,7 @@ def generate_insight_llm(question: str, df, value_col: str, date_col: str = None
     anomaly_count = 0
     if anomaly_df is not None and "is_anomaly" in anomaly_df.columns:
         anomaly_count = int(anomaly_df["is_anomaly"].sum())
+    forecast_summary = _forecast_summary(value_col, forecast_df) or "No forecast computed for this series."
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -115,7 +120,8 @@ def generate_insight_llm(question: str, df, value_col: str, date_col: str = None
                 "Data points: {count}\n"
                 "Min: {min:.2f}, Max: {max:.2f}, Mean: {mean:.2f}, Total: {total:.2f}\n"
                 "Trend direction: {direction}\n"
-                "Anomalies detected: {anomaly_count}",
+                "Anomalies detected: {anomaly_count}\n"
+                "Forecast: {forecast_summary}",
             ),
         ]
     )
@@ -132,6 +138,7 @@ def generate_insight_llm(question: str, df, value_col: str, date_col: str = None
             "max": stats["max"],
             "mean": stats["mean"],
             "total": stats["total"],
+            "forecast_summary": forecast_summary,
             "direction": direction,
             "anomaly_count": anomaly_count,
         }
@@ -151,7 +158,20 @@ def generate_insight_llm(question: str, df, value_col: str, date_col: str = None
     return insight_text, suggested_action
 
 
-def generate_insight(question: str, df, value_col: str, date_col: str = None, anomaly_df=None) -> tuple:
+def _forecast_summary(value_col: str, forecast_df) -> str | None:
+    """One-line plain-language summary of the next projected period, if a
+    forecast was computed. Returns None when there's nothing to say."""
+    if forecast_df is None or "is_forecast" not in forecast_df.columns:
+        return None
+    future = forecast_df[forecast_df["is_forecast"]]
+    if future.empty:
+        return None
+    next_value = future.iloc[0][value_col]
+    value_label = value_col.replace("_", " ")
+    return f"If the current trend continues, {value_label} is projected at roughly {next_value:,.2f} next period."
+
+
+def generate_insight(question: str, df, value_col: str, date_col: str = None, anomaly_df=None, forecast_df=None) -> tuple:
     """Main entry point. Uses the LLM path if OPENAI_API_KEY is set, else
     the deterministic fallback. Returns (insight_text, suggested_action)."""
     if df.empty:
@@ -159,10 +179,10 @@ def generate_insight(question: str, df, value_col: str, date_col: str = None, an
 
     if os.getenv("OPENAI_API_KEY"):
         try:
-            return generate_insight_llm(question, df, value_col, date_col, anomaly_df)
+            return generate_insight_llm(question, df, value_col, date_col, anomaly_df, forecast_df)
         except Exception:
             # Never let an LLM/network hiccup break the pipeline -- fall
             # back to the deterministic template if the API call fails.
-            return generate_insight_fallback(question, df, value_col, date_col, anomaly_df)
+            return generate_insight_fallback(question, df, value_col, date_col, anomaly_df, forecast_df)
 
-    return generate_insight_fallback(question, df, value_col, date_col, anomaly_df)
+    return generate_insight_fallback(question, df, value_col, date_col, anomaly_df, forecast_df)

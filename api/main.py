@@ -52,6 +52,7 @@ class AskResponse(BaseModel):
     sql: str
     results: list
     chart_url: str | None
+    forecast: list | None
     insight: str
     suggested_action: str
 
@@ -88,6 +89,7 @@ def ask(request: AskRequest):
         sql=result["sql"],
         results=result["results"],
         chart_url=chart_url,
+        forecast=result["forecast"],
         insight=result["insight"],
         suggested_action=result["suggested_action"],
     )

@@ -23,7 +23,14 @@ def _slugify(text: str, max_len: int = 40) -> str:
     return slug[:max_len] or "chart"
 
 
-def generate_chart(df: pd.DataFrame, question: str, value_col: str, label_col: str, chart_type: str = "auto") -> str:
+def generate_chart(
+    df: pd.DataFrame,
+    question: str,
+    value_col: str,
+    label_col: str,
+    chart_type: str = "auto",
+    forecast_df: pd.DataFrame = None,
+) -> str:
     """
     Builds a matplotlib chart from df and saves it as a PNG under charts/.
 
@@ -31,6 +38,10 @@ def generate_chart(df: pd.DataFrame, question: str, value_col: str, label_col: s
     - chart_type "bar": categorical bar chart (for comparisons, e.g. by region).
     - chart_type "auto": picks "line" if label_col looks like a date/time
       column, otherwise "bar".
+    - forecast_df: optional output of core.analysis.forecast_trend (same
+      value_col/label_col names, plus an is_forecast column). When given
+      and chart_type is "line", the projected points are drawn as a
+      dashed continuation of the actual series.
 
     Returns the path to the saved PNG file.
     """
@@ -53,7 +64,22 @@ def generate_chart(df: pd.DataFrame, question: str, value_col: str, label_col: s
     if chart_type == "line":
         plot_df[label_col] = pd.to_datetime(plot_df[label_col])
         plot_df = plot_df.sort_values(label_col)
-        ax.plot(plot_df[label_col], plot_df[value_col], marker="o", linewidth=2, color="#2b6cb0")
+        ax.plot(plot_df[label_col], plot_df[value_col], marker="o", linewidth=2, color="#2b6cb0", label="Actual")
+
+        if forecast_df is not None and forecast_df["is_forecast"].any():
+            fdf = forecast_df.copy()
+            fdf[label_col] = pd.to_datetime(fdf[label_col])
+            fdf = fdf.sort_values(label_col)
+            future = fdf[fdf["is_forecast"]]
+            # Bridge from the last actual point so the dashed segment connects visually.
+            last_actual = fdf[~fdf["is_forecast"]].tail(1)
+            bridge = pd.concat([last_actual, future])
+            ax.plot(
+                bridge[label_col], bridge[value_col],
+                linestyle="--", marker="o", linewidth=2, color="#dd6b20", label="Projected",
+            )
+            ax.legend(loc="best")
+
         ax.set_xlabel(label_col.replace("_", " ").title())
         fig.autofmt_xdate()
     else:

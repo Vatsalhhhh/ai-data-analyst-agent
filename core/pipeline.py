@@ -6,11 +6,13 @@ scripts/tests.
 
 import pandas as pd
 
-from core.analysis import detect_anomalies
+from core.analysis import detect_anomalies, forecast_trend
 from core.charts import generate_chart
 from core.db import run_query
 from core.insights import generate_insight
 from core.sql_generator import generate_sql
+
+MIN_POINTS_FOR_FORECAST = 4
 
 
 def _pick_columns(df: pd.DataFrame):
@@ -62,19 +64,32 @@ def run_pipeline(question: str) -> dict:
     if is_time_series and len(df) >= 3:
         anomaly_df = detect_anomalies(df, value_col, label_col)
 
+    forecast_df = None
+    if is_time_series and len(df) >= MIN_POINTS_FOR_FORECAST:
+        forecast_df = forecast_trend(df, value_col, label_col, periods=3)
+
     chart_path = None
     if not df.empty:
         chart_type = "line" if is_time_series else "bar"
-        chart_path = generate_chart(df, question, value_col, label_col, chart_type)
+        chart_path = generate_chart(
+            df, question, value_col, label_col, chart_type,
+            forecast_df=forecast_df if chart_type == "line" else None,
+        )
 
     insight_text, suggested_action = generate_insight(
-        question, df, value_col, label_col if is_time_series else None, anomaly_df
+        question, df, value_col, label_col if is_time_series else None, anomaly_df, forecast_df
     )
+
+    forecast_points = None
+    if forecast_df is not None:
+        future_only = forecast_df[forecast_df["is_forecast"]]
+        forecast_points = future_only.to_dict(orient="records")
 
     return {
         "sql": sql,
         "results": df.to_dict(orient="records"),
         "chart_path": chart_path,
+        "forecast": forecast_points,
         "insight": insight_text,
         "suggested_action": suggested_action,
     }
